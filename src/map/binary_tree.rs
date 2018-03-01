@@ -72,6 +72,7 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
     }
 
     pub fn remove_all(&mut self) -> bool {
+        self.entry = None;
         true
     }
 
@@ -87,19 +88,12 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 struct BinaryTreeNode<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> {
     val: T,
     left: Option<Box<BinaryTreeNode<T>>>,
     right: Option<Box<BinaryTreeNode<T>>>
 }
-
-enum Direction {
-    Left,
-    Right,
-    Stop
-}
-
 
 impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTreeNode<T> {
     fn new(init_val: T) -> BinaryTreeNode<T> {
@@ -174,8 +168,9 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTreeNo
                     &mut Some(ref mut left) => left.remove(val),
                     &mut None => (None, None, false)
                 };
-                if let (_, ref replace,  replace_required @ true) = result {
-
+                if let (_, ref replace,  ref mut replace_required @ true) = result {
+                    *replace_required = false;
+                    self.left.clone_from(replace);
                 }
                 result
             },
@@ -184,7 +179,9 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTreeNo
                     &mut Some(ref mut right) => right.remove(val),
                     &mut None => (None, None, false)
                 };
-                if let (_, ref replace,  replace_required @ true) = result {
+                if let (_, ref replace,  ref mut replace_required @ true) = result {
+                    *replace_required = false;
+                    self.right.clone_from(replace);
                 }
                 result
             },
