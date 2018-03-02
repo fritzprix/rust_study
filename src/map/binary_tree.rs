@@ -1,16 +1,26 @@
-extern crate std;
+use std;
+use map::Map;
 
-pub fn new<T:std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone>() -> BinaryTree<T> {
+
+
+pub fn new<T>() -> BinaryTree<T>
+    where T:std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
     BinaryTree { entry: None }
 }
 
-pub struct BinaryTree<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> {
+
+pub struct BinaryTree<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
     entry: Option<Box<BinaryTreeNode<T>>>
 }
 
-impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T> {
+impl<T> Map<T> for BinaryTree<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
 
-    pub fn insert(&mut self, val: T) -> bool {
+    fn insert(&mut self, val: T) -> bool {
         let entry_node = &mut self.entry;
         match entry_node {
             &mut None => {
@@ -21,14 +31,14 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
         }
     }
 
-    pub fn print(&self) {
+    fn print(&self) {
         match &self.entry {
             &None => println!("Emtry"),
             &Some(ref entry) => entry.print()
         }
     }
 
-    pub fn has(&self, val: T) -> bool {
+    fn has(&self, val: T) -> bool {
         match &self.entry {
             &None => false,
             &Some(ref entry_node) => entry_node.has(val)
@@ -36,7 +46,7 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
     }
 
 
-    pub fn remove_max(&mut self) -> Option<T> {
+    fn remove_max(&mut self) -> Option<T> {
         let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
             &mut None => (None, None, false),
             &mut Some(ref mut entry_node) => entry_node.remove_max()
@@ -48,7 +58,7 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
         result.0
     }
 
-    pub fn remove_min(&mut self) -> Option<T> {
+    fn remove_min(&mut self) -> Option<T> {
         let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
             &mut None => (None, None, false),
             &mut Some(ref mut entry_node) => entry_node.remove_min()
@@ -60,27 +70,28 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
         result.0
     }
 
-    pub fn remove(&mut self,val : T) -> bool {
+    fn remove(&mut self,val : T) -> Option<T> {
         let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
             &mut None => (None, None, false),
             &mut Some(ref mut entry_node) => entry_node.remove(val)
         };
+
         if let (_, ref replace, true) = result {
             self.entry.clone_from(replace);
         }
-        result.0 != None
+        result.0
     }
 
-    pub fn remove_all(&mut self) -> bool {
+    fn remove_all(&mut self) -> bool {
         self.entry = None;
         true
     }
 
-    pub fn join (self, another: BinaryTree<T>) -> BinaryTree<T> {
+    fn join (self, another: Self) -> Self {
         self
     }
 
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         match &self.entry {
             &None => 0,
             &Some(ref entry_node) => entry_node.size()
@@ -88,14 +99,17 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTree<T
     }
 }
 
-#[derive(Clone,Debug)]
-struct BinaryTreeNode<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> {
+#[derive(Clone, Debug)]
+struct BinaryTreeNode<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
     val: T,
     left: Option<Box<BinaryTreeNode<T>>>,
-    right: Option<Box<BinaryTreeNode<T>>>
+    right: Option<Box<BinaryTreeNode<T>>>,
 }
 
-impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTreeNode<T> {
+impl<T> BinaryTreeNode<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone {
     fn new(init_val: T) -> BinaryTreeNode<T> {
         BinaryTreeNode { val: init_val, left: None, right: None }
     }
@@ -188,18 +202,32 @@ impl<T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone> BinaryTreeNo
             std::cmp::Ordering::Equal => {
                 return match (&mut self.left, &mut self.right) {
                     (&mut None, &mut None) => (Some(self.val.clone()), None, true),
-                    (&mut Some(ref mut left),_) => {
+                    (&mut Some(ref mut left),ref mut right) => {
                         match left.take_max() {
-                            (ref taken, ref replace, is_replace_required @ true) => (Some(self.val.clone()), taken.clone(), true),
-                            (ref taken, _, false) => (Some(self.val.clone()), taken.clone(), true),
-                            _ => (None, None, false)
+                            (Some(ref mut taken), ref replace, ref update_required) => {
+                                if *update_required {
+                                    taken.left = replace.clone();
+                                } else {
+                                    taken.left = Some(left.clone());
+                                }
+                                taken.right = right.clone();
+                                (Some(self.val.clone()), Some(taken.clone()), true)
+                            },
+                            _=> (None, None, false)
                         }
                     },
-                    (&mut None, &mut Some(ref mut right)) => {
+                    (ref mut left, &mut Some(ref mut right)) => {
                         match right.take_min() {
-                            (ref taken, ref replace, is_replace_required @ true) => (Some(self.val.clone()), taken.clone(), true),
-                            (ref taken, _, false) => (Some(self.val.clone()), taken.clone(), true),
-                            _ => (None, None, false)
+                            (Some(ref mut taken), ref replace, ref update_required) => {
+                                if *update_required {
+                                    taken.right = replace.clone();
+                                } else {
+                                    taken.right = Some(right.clone());
+                                }
+                                taken.left = left.clone();
+                                (Some(self.val.clone()), Some(taken.clone()), true)
+                            },
+                            _=> (None, None, false)
                         }
                     }
                 };

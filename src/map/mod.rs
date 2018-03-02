@@ -1,5 +1,29 @@
 pub mod binary_tree;
 
+extern crate std;
+
+pub trait Map<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone {
+    fn insert(&mut self, val: T) -> bool;
+
+    fn print(&self);
+
+    fn has(&self, val: T) -> bool;
+
+
+    fn remove_max(&mut self) -> Option<T>;
+
+    fn remove_min(&mut self) -> Option<T>;
+
+    fn remove(&mut self,val : T) -> Option<T>;
+
+    fn remove_all(&mut self) -> bool;
+
+    fn join (self, another: Self) -> Self;
+
+    fn size(&self) -> usize;
+}
+
 #[cfg(test)]
 mod map_tests {
 
