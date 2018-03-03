@@ -1,20 +1,49 @@
 use std;
-use map::Map;
+use super::Map;
 
 
-
-pub fn new<T>() -> BinaryTree<T>
-    where T:std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
-{
-    BinaryTree { entry: None }
-}
 
 
 pub struct BinaryTree<T>
     where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
 {
-    entry: Option<Box<BinaryTreeNode<T>>>
+    entry: Option<Box<BinaryTreeNode<T>>>,
 }
+
+impl<T> BinaryTree<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
+    pub fn new() -> Self
+    {
+        BinaryTree { entry: None  }
+    }
+}
+
+impl<A> std::iter::FromIterator<A> for BinaryTree<A>
+    where A: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
+
+    fn from_iter<T: IntoIterator<Item=A>>(iter: T) -> Self {
+        let into = iter.into_iter();
+        let mut new_tree  = BinaryTree::new();
+        for i in into {
+            new_tree.insert(i);
+        }
+        new_tree
+    }
+}
+
+impl<T> std::iter::Iterator for  BinaryTree<T>
+    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.remove_min()
+    }
+}
+
+
 
 impl<T> Map<T> for BinaryTree<T>
     where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
@@ -33,7 +62,7 @@ impl<T> Map<T> for BinaryTree<T>
 
     fn print(&self) {
         match &self.entry {
-            &None => println!("Emtry"),
+            &None => println!("Empty"),
             &Some(ref entry) => entry.print()
         }
     }
@@ -87,7 +116,10 @@ impl<T> Map<T> for BinaryTree<T>
         true
     }
 
-    fn join (self, another: Self) -> Self {
+    fn join (mut self, another: Self) -> Self {
+        for i in another {
+            self.insert(i);
+        }
         self
     }
 
@@ -115,9 +147,9 @@ impl<T> BinaryTreeNode<T>
     }
 
     fn remove_min(&mut self) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result = (None, None, false);
+        let mut result;
         if let Some(ref mut left_subtree) = self.left {
-            result = left_subtree.remove_max();
+            result = left_subtree.remove_min();
         } else {
             return (Some(self.val.clone()), self.right.clone(), true);
         }
@@ -130,7 +162,7 @@ impl<T> BinaryTreeNode<T>
     }
 
     fn take_min(&mut self) -> (Option<Box<BinaryTreeNode<T>>>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result = (None, None, false);
+        let mut result;
         if let Some(ref mut left_subtree) = self.left {
             result = left_subtree.take_min();
         } else {
@@ -145,7 +177,7 @@ impl<T> BinaryTreeNode<T>
     }
 
     fn remove_max(&mut self) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result = (None, None, false);
+        let mut result;
         if let Some(ref mut right_subtree) = self.right {
             result = right_subtree.remove_max();
         } else {
@@ -160,7 +192,7 @@ impl<T> BinaryTreeNode<T>
     }
 
     fn take_max(&mut self) -> (Option<Box<BinaryTreeNode<T>>>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result = (None, None, false);
+        let mut result;
         if let Some(ref mut right_subtree) = self.right {
             result = right_subtree.take_max();
         } else {
@@ -175,10 +207,9 @@ impl<T> BinaryTreeNode<T>
     }
 
     fn remove(&mut self, val : T) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result = (None, None, false);
         match self.val.partial_cmp(&val).expect("") {
             std::cmp::Ordering::Greater => {
-                result = match &mut self.left {
+                let mut result = match &mut self.left {
                     &mut Some(ref mut left) => left.remove(val),
                     &mut None => (None, None, false)
                 };
@@ -189,7 +220,7 @@ impl<T> BinaryTreeNode<T>
                 result
             },
             std::cmp::Ordering::Less => {
-                result = match &mut self.right {
+                let mut result = match &mut self.right {
                     &mut Some(ref mut right) => right.remove(val),
                     &mut None => (None, None, false)
                 };
