@@ -1,26 +1,28 @@
-use std;
 use super::Map;
+use super::AMap;
 
+use std::fmt::Debug;
+use std::cmp::Ordering::*;
+use std::clone::Clone;
+use std::iter::{FromIterator,Iterator};
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
-
-
-pub struct BinaryTree<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+type Link<T> = Option<Box<BinaryTreeNode<T>>>;
+pub struct BinaryTree<T: Ord + Debug + Copy>
 {
-    entry: Option<Box<BinaryTreeNode<T>>>,
+    root: Link<T>,
 }
 
-impl<T> BinaryTree<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+impl<T: Ord + Debug + Copy> BinaryTree<T>
 {
     pub fn new() -> Self
     {
-        BinaryTree { entry: None  }
+        BinaryTree { root: None  }
     }
 }
 
-impl<A> std::iter::FromIterator<A> for BinaryTree<A>
-    where A: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+impl<A: Ord + Debug + Copy> FromIterator<A> for BinaryTree<A>
 {
 
     fn from_iter<T: IntoIterator<Item=A>>(iter: T) -> Self {
@@ -33,11 +35,9 @@ impl<A> std::iter::FromIterator<A> for BinaryTree<A>
     }
 }
 
-impl<T> std::iter::Iterator for  BinaryTree<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+impl<T: Ord + Debug + Copy> Iterator for  BinaryTree<T>
 {
     type Item = T;
-
     fn next(&mut self) -> Option<Self::Item> {
         self.remove_min()
     }
@@ -45,74 +45,76 @@ impl<T> std::iter::Iterator for  BinaryTree<T>
 
 
 
-impl<T> Map<T> for BinaryTree<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+impl<T: Ord + Debug + Copy> Map<T> for BinaryTree<T>
 {
 
-    fn insert(&mut self, val: T) -> bool {
-        let entry_node = &mut self.entry;
-        match entry_node {
-            &mut None => {
-                *entry_node = Some(Box::new(BinaryTreeNode::new(val)));
+    fn insert(&mut self, val: T) {
+        match &mut self.root {
+            &mut Some(ref mut root) => root.insert(val),
+            root => *root = Some(Box::new(BinaryTreeNode::new(val)))
+        }
+    }
+
+    fn remove(&mut self, val : T) -> bool {
+        let rmv = match &mut self.root {
+            &mut None => return false,
+            some => BinaryTreeNode::locate(some, val)
+        };
+
+        let rmv_val = match rmv {
+            &mut None => return false,
+            &mut Some(ref mut target) if target.left.is_some() => BinaryTreeNode::take_right_most(&mut target.left),
+            &mut Some(ref mut target) if target.right.is_some() => BinaryTreeNode::take_left_most(&mut target.right),
+            _ => None
+        };
+
+        match (rmv, rmv_val) {
+            (_rmv, None) => {
+                *_rmv = None;
                 true
             },
-            &mut Some(ref mut entry_node) => entry_node.insert(val)
+            (&mut Some(ref mut _rm_node), Some(_rv)) => {
+                _rm_node.val = _rv;
+                true
+            },
+            _ => false
+        }
+    }
+
+    fn remove_max(&mut self) -> Option<T> {
+        match &mut self.root {
+            &mut None => None,
+            some => BinaryTreeNode::take_right_most(some)
+        }
+    }
+
+    fn remove_min(&mut self) -> Option<T> {
+        match &mut self.root {
+            &mut None => None,
+            some => BinaryTreeNode::take_left_most(some)
         }
     }
 
     fn print(&self) {
-        match &self.entry {
-            &None => println!("Empty"),
-            &Some(ref entry) => entry.print()
+        println!();
+        match self.root {
+            Some(ref root_node) => root_node.print(0),
+            _ => println!("Empty")
         }
+        println!();
     }
 
+
     fn has(&self, val: T) -> bool {
-        match &self.entry {
+        match &self.root {
             &None => false,
             &Some(ref entry_node) => entry_node.has(val)
         }
     }
 
 
-    fn remove_max(&mut self) -> Option<T> {
-        let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
-            &mut None => (None, None, false),
-            &mut Some(ref mut entry_node) => entry_node.remove_max()
-        };
-
-        if let (_, ref replace, true) = result {
-            self.entry.clone_from(replace);
-        }
-        result.0
-    }
-
-    fn remove_min(&mut self) -> Option<T> {
-        let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
-            &mut None => (None, None, false),
-            &mut Some(ref mut entry_node) => entry_node.remove_min()
-        };
-
-        if let (_, ref replace, true) = result {
-            self.entry.clone_from(replace);
-        }
-        result.0
-    }
-
-    fn remove(&mut self,val : T) -> Option<T> {
-        let result: (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) = match &mut self.entry {
-            &mut None => (None, None, false),
-            &mut Some(ref mut entry_node) => entry_node.remove(val)
-        };
-
-        if let (_, ref replace, true) = result {
-            self.entry.clone_from(replace);
-        }
-        result.0
-    }
-
     fn remove_all(&mut self) -> bool {
-        self.entry = None;
+        self.root = None;
         true
     }
 
@@ -124,174 +126,125 @@ impl<T> Map<T> for BinaryTree<T>
     }
 
     fn size(&self) -> usize {
-        match &self.entry {
+        match &self.root {
             &None => 0,
             &Some(ref entry_node) => entry_node.size()
         }
     }
 }
 
-#[derive(Clone, Debug)]
-struct BinaryTreeNode<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
+#[derive(Debug)]
+struct BinaryTreeNode<T: Ord + Debug + Copy>
 {
     val: T,
-    left: Option<Box<BinaryTreeNode<T>>>,
-    right: Option<Box<BinaryTreeNode<T>>>,
+    left: Link<T>,
+    right: Link<T>,
 }
 
-impl<T> BinaryTreeNode<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone {
-    fn new(init_val: T) -> BinaryTreeNode<T> {
-        BinaryTreeNode { val: init_val, left: None, right: None }
+impl<T: Ord + Debug + Copy> BinaryTreeNode<T>
+{
+
+    fn new(val : T) -> BinaryTreeNode<T>
+    {
+        BinaryTreeNode {val , left : None, right : None}
     }
 
-    fn remove_min(&mut self) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result;
-        if let Some(ref mut left_subtree) = self.left {
-            result = left_subtree.remove_min();
-        } else {
-            return (Some(self.val.clone()), self.right.clone(), true);
+    fn print(&self, depth : u32) {
+        if let Some(ref right) = self.right {
+            right.print(depth + 1);
         }
-
-        if let (_, ref mut replace, ref mut updated @ true) = result {
-            self.left.clone_from(replace);
-            *updated = false;
+        for _ in 0 .. depth {
+            print!("\t");
         }
-        result
+        println!("{:?} @ {}",self.val, depth);
+        if let Some(ref left) = self.left {
+            left.print(depth + 1);
+        }
     }
 
-    fn take_min(&mut self) -> (Option<Box<BinaryTreeNode<T>>>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result;
-        if let Some(ref mut left_subtree) = self.left {
-            result = left_subtree.take_min();
-        } else {
-            return (Some(Box::new(self.clone())), self.right.clone(), true);
+    fn insert(&mut self, val : T)  {
+        match match self.val > val {
+            true => &mut self.left,
+            false => &mut self.right
+        } {
+            &mut Some(ref mut target) => target.insert(val),
+            _none => *_none = Some(Box::new(BinaryTreeNode::new(val)))
         }
-
-        if let (_, ref replace, ref mut updated @ true) = result {
-            self.left.clone_from(replace);
-            *updated = false;
-        }
-        result
     }
 
-    fn remove_max(&mut self) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result;
-        if let Some(ref mut right_subtree) = self.right {
-            result = right_subtree.remove_max();
-        } else {
-            return (Some(self.val.clone()), self.left.clone(), true);
+    fn take_right_most(link : &mut Link<T>) -> Option<T> {
+        let right_most = BinaryTreeNode::right_leaf(link);
+        let replace = match right_most {
+            &mut Some(ref mut rm) if rm.left.is_some() => (rm.left.take(), Some(rm.val)),
+            &mut Some(ref mut rm) => (None, Some(rm.val)),
+            _ => (None, None)
+        };
+        if let (_replace, Some(_)) = replace {
+            *right_most = _replace;
         }
-
-        if let (_, ref mut replace, ref mut updated @ true) = result {
-            self.right.clone_from(replace);
-            *updated = false;
-        }
-        result
+        replace.1
     }
 
-    fn take_max(&mut self) -> (Option<Box<BinaryTreeNode<T>>>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        let mut result;
-        if let Some(ref mut right_subtree) = self.right {
-            result = right_subtree.take_max();
-        } else {
-            return (Some(Box::new(self.clone())), self.left.clone(), true);
+    fn right_leaf(link : &mut Link<T>) -> &mut Link<T> {
+        match link {
+            &mut Some(ref mut current) if current.right.is_some() => BinaryTreeNode::right_leaf(&mut current.right),
+            other => return other
         }
-
-        if let (_, ref replace, ref mut updated @ true) = result {
-            self.right.clone_from(replace);
-            *updated = false;
-        }
-        result
     }
 
-    fn remove(&mut self, val : T) -> (Option<T>, Option<Box<BinaryTreeNode<T>>>, bool) {
-        match self.val.partial_cmp(&val).expect("") {
-            std::cmp::Ordering::Greater => {
-                let mut result = match &mut self.left {
-                    &mut Some(ref mut left) => left.remove(val),
-                    &mut None => (None, None, false)
-                };
-                if let (_, ref replace,  ref mut replace_required @ true) = result {
-                    *replace_required = false;
-                    self.left.clone_from(replace);
-                }
-                result
-            },
-            std::cmp::Ordering::Less => {
-                let mut result = match &mut self.right {
-                    &mut Some(ref mut right) => right.remove(val),
-                    &mut None => (None, None, false)
-                };
-                if let (_, ref replace,  ref mut replace_required @ true) = result {
-                    *replace_required = false;
-                    self.right.clone_from(replace);
-                }
-                result
-            },
-            std::cmp::Ordering::Equal => {
-                return match (&mut self.left, &mut self.right) {
-                    (&mut None, &mut None) => (Some(self.val.clone()), None, true),
-                    (&mut Some(ref mut left),ref mut right) => {
-                        match left.take_max() {
-                            (Some(ref mut taken), ref replace, ref update_required) => {
-                                if *update_required {
-                                    taken.left = replace.clone();
-                                } else {
-                                    taken.left = Some(left.clone());
-                                }
-                                taken.right = right.clone();
-                                (Some(self.val.clone()), Some(taken.clone()), true)
-                            },
-                            _=> (None, None, false)
-                        }
+    fn take_left_most(link : &mut Link<T>) -> Option<T> {
+        let left_most = BinaryTreeNode::left_leaf(link);
+        let replace = match left_most {
+            &mut Some(ref mut rm) if rm.right.is_some() => (rm.right.take(), Some(rm.val)),
+            &mut Some(ref mut rm) => (None, Some(rm.val)),
+            _ => (None,None)
+        };
+
+        if let (_replace, Some(_)) = replace {
+            *left_most = _replace;
+        }
+        replace.1
+    }
+
+
+    fn left_leaf(link : &mut Link<T>) -> &mut Link<T> {
+        match link {
+            &mut Some(ref mut current) if current.left.is_some() => BinaryTreeNode::left_leaf(&mut current.left),
+            other => return other
+        }
+    }
+
+    fn locate(link : &mut Link<T>, val : T) -> &mut Link<T> {
+        match link {
+            &mut None => link,
+            some => {
+                let next = match match some {
+                    &mut Some(ref cur) => cur.val.cmp(&val),
+                    _ => return some
+                } {
+                    Greater => match some {
+                        &mut Some(ref mut _cur) => &mut _cur.left,
+                        _ => return some
                     },
-                    (ref mut left, &mut Some(ref mut right)) => {
-                        match right.take_min() {
-                            (Some(ref mut taken), ref replace, ref update_required) => {
-                                if *update_required {
-                                    taken.right = replace.clone();
-                                } else {
-                                    taken.right = Some(right.clone());
-                                }
-                                taken.left = left.clone();
-                                (Some(self.val.clone()), Some(taken.clone()), true)
-                            },
-                            _=> (None, None, false)
-                        }
-                    }
+                    Less => match some {
+                        &mut Some(ref mut _cur) => &mut _cur.right,
+                        _ => return some
+                    },
+                    Equal => return some
                 };
-
-            }
-        }
-
-    }
-
-    fn insert(&mut self, val: T) -> bool {
-        let target = if self.val > val { &mut self.left } else { &mut self.right };
-        match target {
-            &mut None => {
-                *target = Some(Box::new(BinaryTreeNode { val, left: None, right: None }));
-                true
+                BinaryTreeNode::locate(next, val)
             },
-            &mut Some(ref mut subtree) => subtree.insert(val)
         }
     }
+
 
     fn size(&self) -> usize {
         let mut size = 0;
-        match &self.right {
-            &None => {},
-            &Some(ref right) => {
-                size += right.size();
-            }
+        if let Some(ref right) = self.right {
+            size += right.size();
         }
-        match &self.left {
-            &None => {},
-            &Some(ref left) => {
-                size += left.size();
-            }
+        if let Some(ref left) = self.left {
+            size += left.size();
         }
         size + 1
     }
@@ -314,9 +267,125 @@ impl<T> BinaryTreeNode<T>
             _ => false,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct ABinaryTreeNode<V> where V: Debug + Clone
+{
+    key :u64,
+    val : V,
+    right : Option<Box<ABinaryTreeNode<V>>>,
+    left :Option<Box<ABinaryTreeNode<V>>>
+}
+
+pub struct ABinaryTree<V> where V: Debug + Clone
+{
+    entry: Option<Box<ABinaryTreeNode<V>>>,
+}
+
+impl<V> ABinaryTree<V> where V: Debug + Clone
+{
+    pub fn new() -> Self {
+        ABinaryTree { entry: None }
+    }
+}
+
+impl<V> ABinaryTree<V> where V: Debug + Clone
+{
+    fn hash<K>(key: K) -> u64 where K: Hash {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl<V> AMap<V> for ABinaryTree<V> where V: Debug + Clone
+{
+
+    fn insert<K>(&mut self, key: K, val: V) where K: Hash {
+        let key_hash = Self::hash(key);
+        match self.entry {
+            Some(ref mut entry_node) => entry_node.insert(key_hash, val),
+            None => self.entry = Some(Box::new(ABinaryTreeNode::new(key_hash, val)))
+        }
+    }
+
+    fn print(&self) {
+        if let Some(ref entry_node) = self.entry {
+            entry_node.print();
+        }
+    }
+
+    fn has<K>(&self, key: K) -> bool where K: Hash {
+        let key_hash = Self::hash(key);
+        match self.entry {
+            Some(ref entry_node) => entry_node.has(key_hash),
+            None => false
+        }
+    }
+
+    fn remove<K>(&mut self, key: K) -> Option<V> where K: Hash {
+        let key_hash = Self::hash(key);
+        None
+    }
+
+    fn remove_all(&mut self) -> bool {
+        unimplemented!()
+    }
+
+    fn join(self, another: Self) -> Self {
+        unimplemented!()
+    }
+
+    fn size(&self) -> usize {
+        unimplemented!()
+    }
+
+}
+
+impl <V> ABinaryTreeNode<V> where V:Debug + Clone {
+
+    fn new(key : u64, val : V) -> Self {
+        ABinaryTreeNode {key, val, left: None, right: None}
+    }
+
+    fn insert(&mut self, key: u64, val :V)
+    {
+
+        match match self.key > key {
+            true => &mut self.left,
+            false => &mut self.right
+        } {
+            &mut Some(ref mut next) => next.insert(key, val),
+            _next => *_next = Some(Box::new(ABinaryTreeNode::new(key,val)))
+        }
+    }
+
+    fn locate(link : &mut Option<Box<ABinaryTreeNode<V>>>, key: u64) -> &mut Option<Box<ABinaryTreeNode<V>>>
+    {
+        link
+    }
+
+
 
     fn print(&self) {
         self.print_rc(0);
+    }
+
+    fn has(&self, key : u64) -> bool {
+        if self.key == key {
+            return true;
+        } else if self.key > key {
+            return match self.left {
+                Some(ref left) => left.has(key),
+                None => false
+            };
+        } else {
+            return match self.right {
+                Some(ref right) => right.has(key),
+                None => false
+            };
+        }
     }
 
 
@@ -348,4 +417,5 @@ impl<T> BinaryTreeNode<T>
             }
         }
     }
+
 }

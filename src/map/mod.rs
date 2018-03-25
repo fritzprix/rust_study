@@ -1,10 +1,14 @@
-pub mod tree;
 extern crate std;
 
+pub mod tree;
+use std::cmp::PartialOrd;
+use std::fmt::Debug;
+use std::clone::Clone;
+use std::hash::Hash;
+
 pub trait Map<T>
-    where T: std::cmp::PartialOrd + std::fmt::Debug + std::clone::Clone
 {
-    fn insert(&mut self, val: T) -> bool;
+    fn insert(&mut self, val: T);
 
     fn print(&self);
 
@@ -14,7 +18,25 @@ pub trait Map<T>
 
     fn remove_min(&mut self) -> Option<T>;
 
-    fn remove(&mut self,val : T) -> Option<T>;
+    fn remove(&mut self,val : T) -> bool;
+
+    fn remove_all(&mut self) -> bool;
+
+    fn join (self, another: Self) -> Self;
+
+    fn size(&self) -> usize;
+}
+
+pub trait AMap<T>
+    where T: Debug + Clone
+{
+    fn insert<K>(&mut self, key : K, val: T)  where K : Hash;
+
+    fn print(&self);
+
+    fn has<K>(&self, key: K) -> bool where K: Hash;
+
+    fn remove<K>(&mut self,key : K) -> Option<T> where K: Hash;
 
     fn remove_all(&mut self) -> bool;
 
