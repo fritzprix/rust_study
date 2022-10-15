@@ -1,7 +1,0 @@
-[package]
-name = "collection"
-version = "0.1.0"
-authors = ["fritzprix <innocentevil0914@gmail.com>"]
-
-[dependencies]
-rand = "0.4"
