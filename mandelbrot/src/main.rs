@@ -19,7 +19,9 @@ struct Args {
     #[arg(short, long)]
     upper_left: String,
     #[arg(short, long)]
-    lower_right: String
+    lower_right: String,
+    #[arg(short, long)]
+    n_worker: usize
 }
 
 fn escape_time(c: Complex<f64>, hard_limit: u32, crit_r: f64) -> Option<u32> {
@@ -79,20 +81,10 @@ fn write_image(filename: &str, pixels: &[u8], bounds: (usize, usize)) -> Result<
 fn render(pixels: &mut [u8],
           bounds: (usize, usize),
           upper_left: Complex<f64>, 
-          lower_right: Complex<f64>,
-          nworkers: usize) {
+          lower_right: Complex<f64>) {
+            println!("render {:?}", bounds);
             assert_eq!(pixels.len(), bounds.0 * bounds.1);
             let (w, h) = bounds;
-            // let nh = h / nworkers + 1;
-            // let bands: Vec<&mut [u8]> = pixels.chunks_mut(nh).collect();
-            // crossbeam::scope(|spawner| {
-            //     for (i, band) in bands.into_iter().enumerate() {
-            //         let btop = nh * i;
-            //         let bbot = btop + nh;
-    
-            //     }
-            // });
-            
             for y in 0..h {
                 for x in 0..w {
                     let c = pixel_to_point(bounds, (x, y), upper_left, lower_right);
@@ -104,6 +96,28 @@ fn render(pixels: &mut [u8],
             }
 }
 
+fn render_parallel(pixels: &mut [u8],
+                   bounds: (usize, usize),
+                   upper_left: Complex<f64>,
+                   lower_right: Complex<f64>,
+                   nworkers: usize) {
+
+                    let (width, _) = bounds;
+                    crossbeam::scope(|spawner| {
+                        let n_height = bounds.1 / nworkers;
+
+                        for (idx, band) in pixels.chunks_mut(n_height * width).enumerate() {
+                            let band_top = n_height * idx;
+                            let band_bottom = band_top + band.len() / width;
+                            let band_upper_left = pixel_to_point(bounds, (0, band_top), upper_left, lower_right);
+                            let band_lower_right = pixel_to_point(bounds, (width, band_bottom), upper_left, lower_right);
+                            spawner.spawn(move |_| {
+                                render(band, (width, band.len() / width), band_upper_left, band_lower_right)
+                            });
+                        }
+                    }).expect("fail to create scope");
+}
+
 
 
 fn main() {
@@ -112,7 +126,7 @@ fn main() {
     let upper_left = parse_complex(&args.upper_left).expect("error parsing upper_left point");
     let lower_right = parse_complex(&args.lower_right).expect("error parsing lower right point");
     let mut pixels = vec![0u8; bounds.0 * bounds.1];
-    render(&mut pixels, bounds, upper_left, lower_right, 0);
+    render_parallel(&mut pixels, bounds, upper_left, lower_right, args.n_worker);
 
     write_image(&args.output, &pixels, bounds).expect("error writing image");
 }
