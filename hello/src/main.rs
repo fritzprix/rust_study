@@ -8,12 +8,11 @@ struct ListNode<T> {
 
 
 struct List<T> {
-    entry: Option<Box<ListNode<T>>>
+    head: Option<Box<ListNode<T>>>,
 }
 
 impl <T> List<T> where T: ToString + Sized {
     fn new() -> Self {
-        List { entry: None }
     }
 }
 
@@ -30,7 +29,7 @@ impl <T> ListNode<T> where T: ToString + Sized {
 impl <T> Debug for List<T> where T: ToString + Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut res = "[".to_string();
-        let mut cur = &self.entry;
+        let mut cur = &self.head;
         while let Some(n) = cur {
             res.push_str(n.value().to_string().as_str());
             cur = &n.next;
@@ -45,7 +44,7 @@ impl <T> Debug for List<T> where T: ToString + Sized {
 
 impl <T> List<T> where T: ToString + Sized {
     fn enqueue(&mut self, value: T) {
-        let mut cur = &mut self.entry;
+        let mut cur = &mut self.head;
         loop {
             match cur {
                 Some(c) => {
@@ -60,9 +59,9 @@ impl <T> List<T> where T: ToString + Sized {
     }
 
     fn dequeue(&mut self) -> Option<T> {
-        let head = std::mem::replace(&mut self.entry, None);
+        let head = std::mem::replace(&mut self.head, None);
         if let Some(n) = head {
-            let _ = std::mem::replace(&mut self.entry, n.next);
+            let _ = std::mem::replace(&mut self.head, n.next);
             Some(n.value)
         } else {
             None
