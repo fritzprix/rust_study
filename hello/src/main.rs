@@ -1,5 +1,8 @@
 
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc, collections::HashMap, vec};
+
+mod collection;
+
 
 struct ListNode<T> {
     next: Option<Box<ListNode<T>>>,
@@ -13,6 +16,7 @@ struct List<T> {
 
 impl <T> List<T> where T: ToString + Sized {
     fn new() -> Self {
+        List { head:None }
     }
 }
 
@@ -69,6 +73,19 @@ impl <T> List<T> where T: ToString + Sized {
     }
 }
 
+fn show<'a>(table: &'a HashMap<String,Vec<String>>) {
+    for (k, v) in table {
+        println!("{} : {:?}", k, v);
+    }
+}
+
+fn sort_works<'a>(table: &'a mut HashMap<String, Vec<String>>) {
+    for (_, v) in table {
+        v.sort();
+    }
+}
+
+
 fn main() {
     let mut my_list = List::<u32>::new();
     for i in 0..5 {
@@ -77,6 +94,15 @@ fn main() {
     println!("{:?}", my_list);
     assert_eq!(my_list.dequeue(), Some(0u32));
     println!("{:?}", my_list);
+    
+
+    let mut table = HashMap::<String, Vec<String>>::new();
+    table.insert("david".to_string(), vec!["The Card".to_owned(), "Hello".to_string()]);
+    table.insert("seul".to_string(), vec!["Dow".to_string(), "aaw".to_string()]);
+
+    show(&table);
+    sort_works(&mut table);
+    show(&table);
 
 }
 
