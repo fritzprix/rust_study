@@ -7,12 +7,14 @@ struct ListNode<T> {
 }
 
 
-struct List<T> {
+struct List<'a,T> {
     head: Option<Box<ListNode<T>>>,
+    cur: Option<&'a Box<ListNode<T>>>
 }
 
-impl <T> List<T> where T: ToString + Sized {
+impl <'a, T> List<'a, T> where T: ToString + Sized {
     fn new() -> Self {
+        List {head: None, cur: None}
     }
 }
 
@@ -26,7 +28,15 @@ impl <T> ListNode<T> where T: ToString + Sized {
     }
 }
 
-impl <T> Debug for List<T> where T: ToString + Sized {
+
+impl <'a, T> Iterator for &List<'a,T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
+impl <'a,T> Debug for List<'a, T> where T: ToString + Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut res = "[".to_string();
         let mut cur = &self.head;
@@ -42,7 +52,7 @@ impl <T> Debug for List<T> where T: ToString + Sized {
     }
 }
 
-impl <T> List<T> where T: ToString + Sized {
+impl <'a, T> List<'a, T> where T: ToString + Sized {
     fn enqueue(&mut self, value: T) {
         let mut cur = &mut self.head;
         loop {
@@ -69,14 +79,35 @@ impl <T> List<T> where T: ToString + Sized {
     }
 }
 
-fn main() {
+
+fn main() -> Result<(), std::io::Error>{
     let mut my_list = List::<u32>::new();
     for i in 0..5 {
         my_list.enqueue(i)
     }
+
     println!("{:?}", my_list);
     assert_eq!(my_list.dequeue(), Some(0u32));
     println!("{:?}", my_list);
+
+    'search:
+    for i in 0..9 {
+        println!("{}", i);
+        if i == 2 {
+            break 'search;
+        }
+    }
+
+    let mut v = (0..4).map(|v| v.to_string()).collect::<Vec<String>>();
+    for i in &mut v {
+        *i = "".to_string();
+    }
+
+
+    for item in &my_list {
+        println!("{}", item);
+    }
+    Ok(())
 
 }
 
