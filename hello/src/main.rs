@@ -7,18 +7,27 @@ struct ListNode<T> {
 }
 
 
-struct List<'a,T> {
+struct List<T> {
     head: Option<Box<ListNode<T>>>,
-    cur: Option<&'a Box<ListNode<T>>>
 }
 
-impl <'a, T> List<'a, T> where T: ToString + Sized {
+impl <T> List<T> where T: ToString {
     fn new() -> Self {
-        List {head: None, cur: None}
+        List {head: None}
+    }
+
+    fn iter(&self) -> Iter<T> {
+        let head = match &self.head {
+            Some(c) => {
+                Some(c.as_ref())
+            },
+            None => None
+        };
+        Iter {cursor: head}
     }
 }
 
-impl <T> ListNode<T> where T: ToString + Sized {
+impl <T> ListNode<T> where T: ToString {
     fn new(value: T) -> Self {
         ListNode { next: None, value }
     }
@@ -28,15 +37,28 @@ impl <T> ListNode<T> where T: ToString + Sized {
     }
 }
 
+pub struct Iter<'a, T: 'a> {
+    cursor: Option<&'a ListNode<T>>
+}
 
-impl <'a, T> Iterator for &List<'a,T> {
-    type Item = T;
+impl <'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
     fn next(&mut self) -> Option<Self::Item> {
-        unimplemented!()
+        match self.cursor {
+            Some(c) => {
+                self.cursor = match &c.next {
+                    Some(n) => Some(&n),
+                    None => None
+                };
+                Some(&c.value)
+            },
+            None => None
+        }
     }
 }
 
-impl <'a,T> Debug for List<'a, T> where T: ToString + Sized {
+
+impl <T> Debug for List<T> where T: ToString + Sized {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut res = "[".to_string();
         let mut cur = &self.head;
@@ -52,7 +74,7 @@ impl <'a,T> Debug for List<'a, T> where T: ToString + Sized {
     }
 }
 
-impl <'a, T> List<'a, T> where T: ToString + Sized {
+impl <T> List<T> where T: ToString + Sized {
     fn enqueue(&mut self, value: T) {
         let mut cur = &mut self.head;
         loop {
@@ -90,6 +112,10 @@ fn main() -> Result<(), std::io::Error>{
     assert_eq!(my_list.dequeue(), Some(0u32));
     println!("{:?}", my_list);
 
+    for e in my_list.iter() {
+        println!("my_list {}", e)
+    }
+
     'search:
     for i in 0..9 {
         println!("{}", i);
@@ -99,12 +125,13 @@ fn main() -> Result<(), std::io::Error>{
     }
 
     let mut v = (0..4).map(|v| v.to_string()).collect::<Vec<String>>();
+
+
     for i in &mut v {
         *i = "".to_string();
     }
 
-
-    for item in &my_list {
+    for item in my_list.iter() {
         println!("{}", item);
     }
     Ok(())
