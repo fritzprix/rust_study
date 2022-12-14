@@ -1,3 +1,10 @@
+/** 
+ * Test URL
+ *  - https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8
+ *  - https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8
+ */
+
+
 extern crate hyper;
 extern crate futures;
 extern crate tokio;
@@ -7,11 +14,9 @@ extern crate webpki_roots;
 
 mod hls;
 
-use std::{sync::Arc, io::Read};
 use clap::Parser;
-use hyper::{Client, StatusCode};
-use hyper::body::{HttpBody as _, Buf};
-use hls::m3u8::{self, Playlist};
+use hls::m3u8::master::Playlist;
+
 
 
 
@@ -27,10 +32,13 @@ const TEST_HOST_URL: &'static str = "https://demo.unified-streaming.com/k8s/feat
 fn main() {
 
     let args = Args::parse();
-    let m3u8_playlst = Playlist::from(args.hostname);
+    let playlist = Playlist::try_from(args.hostname.as_str()).unwrap();
+    for stream in playlist.get_variants() {
+        println!("{:?}", stream);
+    }
 
     
     
-    println!("{:?}", m3u8_playlst);
+    println!("{:?}", playlist);
 
 }
