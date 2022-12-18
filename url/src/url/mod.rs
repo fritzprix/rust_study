@@ -1,4 +1,4 @@
-use std::{collections::{HashMap}, str::Split};
+use std::{collections::{HashMap}, str::{Split, Chars}, vec};
 
 use regex;
 
@@ -6,6 +6,9 @@ type MalformedUrlError = Box<dyn std::error::Error>;
 const URL_CAPTURE_PATTERN: &'static str = "([^:]+):(//[^/]+)([^?]+)?(\\?[^#]+)?(#[\\S]+)?";
 const AUTHORITY_PATTERN: &'static str = "//?([^@]+@)?([^:]+)?(:[0-9]+)?";
 const QUERY_CAPTURE_PATTERN: &'static str = "\\??&?([^=]+)=([^&]+)";
+const URL_RESERVED: &'static str = "!*'();:@&=+$,/?%#[]";
+const URL_ENCODED_PATTERN: &'static str = "%([0-9a-fA-F]{2})";
+
 #[derive(Debug,Copy, PartialEq)]
 pub enum URLScheme {
     HTTPS,
@@ -38,6 +41,9 @@ struct Query {
 }
 
 #[derive(Debug)]
+
+
+
 pub struct Url {
     scheme: URLScheme,
     authority: Authority, 
@@ -46,6 +52,75 @@ pub struct Url {
     fragment: Option<String>,
 }
 
+
+fn encode_url (s: &str) -> String {
+    let enc = s.chars().map(|c| if !URL_RESERVED.contains(c) {
+        if c.is_ascii() {
+            String::from(c)
+        } else {
+            // non-english character  => utf8
+            // utf8 => percent-encoding
+            let mut dst = vec![0u8; c.len_utf8()];
+            let _ = c.encode_utf8(&mut dst);
+            dst.iter()
+                .map(|c| String::from(format!("%{:x}", c)).to_uppercase())
+                .collect::<Vec<String>>()
+                .join("")
+        }
+    } else {
+        String::from(format!("%{:x}", c as u8)).to_uppercase()
+    }).collect::<Vec<_>>();
+    enc.join("")
+}
+
+
+
+fn precent_hex_to_utf8(s: &str) -> Result<(String, usize), MalformedUrlError> {
+    let mut decoded = String::new();
+    let leading_byte = match (&s[0..1], &s[1..3]) {
+        ("%", hex_str) => u8::from_str_radix(hex_str, 16)?,
+        _ => return Err(MalformedUrlError::from("not starting with \"%\""))
+    };
+
+    let len = match leading_byte & 0b1111_0000 {
+        0b1111_0000 => 4usize,
+        0b1110_0000 => 3usize,
+        0b1100_0000 => 2usize,
+        _ => 1usize,
+    };
+
+    decoded.push(leading_byte as char);
+    for i in 1..len {
+        let pos = i * 3;
+        let c = match (&s[pos..pos + 1], &s[pos + 1 .. pos + 3]) {
+            ("%", hex_str) => u8::from_str_radix(hex_str, 16)?,
+            _ => return Err(MalformedUrlError::from("not starting with \"%\""))
+        };
+        decoded.push(c as char);
+    }
+
+    Ok((decoded, len))
+}
+
+fn decode_url (s: &str) -> Result<String, MalformedUrlError> {
+    // TODO: deal utf8
+    let c_seq: Vec<(usize, char)> = s.char_indices().collect();
+    let mut decoded = String::new();
+    let mut cursor = c_seq.iter();
+    while let Some((pos, c)) = cursor.next() {
+        match c {
+            &'%' => {
+                let decoded_utf8 = precent_hex_to_utf8(&s[*pos..])?;
+                for _ in 1..decoded_utf8.1 * 3 {
+                    let __ = cursor.next();
+                }
+                decoded += &decoded_utf8.0;
+            },
+            _ => decoded.push(*c)
+        }
+    }
+    Ok(decoded)
+}
 
 pub struct UrlStream {
 
@@ -136,6 +211,7 @@ impl TryFrom<&str> for Authority {
     }
 }
 
+
 impl TryFrom<&str> for URLScheme {
     type Error = MalformedUrlError;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -196,7 +272,7 @@ impl Url {
 }
 
 #[test]
-fn url_parse() -> Result<(),MalformedUrlError> {
+fn test_url_parse() -> Result<(),MalformedUrlError> {
     let url = Url::parse("https://user@www.domain.com:3232/path1/path2/path3?name=david&age=23#about")?;
     assert_eq!(url.scheme(), URLScheme::HTTPS);
     assert_eq!(url.userinfo(), Some("user"));
@@ -211,4 +287,12 @@ fn url_parse() -> Result<(),MalformedUrlError> {
 
 
     Ok(())
+}
+
+#[test]
+fn test_pair_endcode_decode_url() {
+    assert_eq!(encode_url("user@somemail.com:some@@pa??!#$ord"), "user%40somemail.com%3Asome%40%40pa%3F%3F%21%23%24ord");
+    assert_eq!(decode_url("user%40somemail.com%3Asome%40%40pa%3F%3F%21%23%24ord").unwrap(), String::from("user@somemail.com:some@@pa??!#$ord"));
+    assert_eq!(encode_url("/패스/사용자?이름=아무개&나이=32"), "%2F%ED%8C%A8%EC%8A%A4%2F%EC%82%AC%EC%9A%A9%EC%9E%90%3F%EC%9D%B4%EB%A6%84%3D%EC%95%84%EB%AC%B4%EA%B0%9C%26%EB%82%98%EC%9D%B4%3D32");
+    assert_eq!(decode_url("%2F%ED%8C%A8%EC%8A%A4%2F%EC%82%AC%EC%9A%A9%EC%9E%90%3F%EC%9D%B4%EB%A6%84%3D%EC%95%84%EB%AC%B4%EA%B0%9C%26%EB%82%98%EC%9D%B4%3D32").unwrap(), String::from("/패스/사용자?이름=아무개&나이=32"));
 }
