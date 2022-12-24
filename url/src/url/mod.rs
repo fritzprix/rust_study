@@ -75,8 +75,8 @@ fn encode_url (s: &str) -> String {
 
 
 
-fn precent_hex_to_utf8(s: &str) -> Result<(String, usize), MalformedUrlError> {
-    let mut decoded = String::new();
+fn precent_hex_to_utf8(s: &str) -> Result<(Vec<u8>, usize), MalformedUrlError> {    
+    
     let leading_byte = match (&s[0..1], &s[1..3]) {
         ("%", hex_str) => u8::from_str_radix(hex_str, 16)?,
         _ => return Err(MalformedUrlError::from("not starting with \"%\""))
@@ -88,15 +88,15 @@ fn precent_hex_to_utf8(s: &str) -> Result<(String, usize), MalformedUrlError> {
         0b1100_0000 => 2usize,
         _ => 1usize,
     };
+    let mut decoded = vec![leading_byte];
 
-    decoded.push(leading_byte as char);
     for i in 1..len {
         let pos = i * 3;
         let c = match (&s[pos..pos + 1], &s[pos + 1 .. pos + 3]) {
             ("%", hex_str) => u8::from_str_radix(hex_str, 16)?,
             _ => return Err(MalformedUrlError::from("not starting with \"%\""))
         };
-        decoded.push(c as char);
+        decoded.push(c);
     }
 
     Ok((decoded, len))
@@ -110,11 +110,12 @@ fn decode_url (s: &str) -> Result<String, MalformedUrlError> {
     while let Some((pos, c)) = cursor.next() {
         match c {
             &'%' => {
-                let decoded_utf8 = precent_hex_to_utf8(&s[*pos..])?;
-                for _ in 1..decoded_utf8.1 * 3 {
+                let (utf8_raw, consumed_size) = precent_hex_to_utf8(&s[*pos..])?;
+                for _ in 1..consumed_size * 3 {
                     let __ = cursor.next();
                 }
-                decoded += &decoded_utf8.0;
+                let utf8_str = String::from_utf8(utf8_raw)?;
+                decoded += &utf8_str;
             },
             _ => decoded.push(*c)
         }
