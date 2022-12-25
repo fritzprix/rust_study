@@ -9,6 +9,7 @@ const QUERY_CAPTURE_PATTERN: &'static str = "\\??&?([^=]+)=([^&]+)";
 const URL_RESERVED: &'static str = "!*'();:@&=+$,/?%#[]";
 const URL_ENCODED_PATTERN: &'static str = "%([0-9a-fA-F]{2})";
 
+
 #[derive(Debug,Copy, PartialEq)]
 pub enum URLScheme {
     HTTPS,
@@ -28,6 +29,21 @@ impl Clone for URLScheme {
     }
 }
 
+pub struct UrlStream {
+
+}
+
+impl URLScheme {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::FILE => "file",
+            Self::FTP => "ftp",
+            Self::HTTP => "http",
+            Self::HTTPS => "https"
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Authority {
     user_info: Option<String>,
@@ -35,19 +51,41 @@ pub struct Authority {
     port: Option<u32>,
 }
 
+impl Authority {
+    pub fn to_string(&self) -> String {
+        let mut authority = String::new();
+        if let Some(user) = &self.user_info {
+            authority += &format!("{}@", user);
+        }
+        authority += &self.host;
+        if let Some(p) = self.port {
+            authority += &p.to_string();
+        }
+        authority
+    }
+}
+
 #[derive(Debug)]
 struct Query {
     parameters: HashMap<String, String>
 }
 
+impl Query {
+    pub fn to_string(&self) -> String {
+        let mut query: Vec<String> = vec![];
+        for (key, value) in &self.parameters {
+            query.push(format!("{}={}", key, value));
+        }
+        query.join("&")
+    }
+}
+
+
 #[derive(Debug)]
-
-
-
 pub struct Url {
     scheme: URLScheme,
     authority: Authority, 
-    path: String,
+    path: Vec<String>,
     query: Query,
     fragment: Option<String>,
 }
@@ -72,7 +110,6 @@ fn encode_url (s: &str) -> String {
     }).collect::<Vec<_>>();
     enc.join("")
 }
-
 
 
 fn precent_hex_to_utf8(s: &str) -> Result<(Vec<u8>, usize), MalformedUrlError> {    
@@ -103,7 +140,6 @@ fn precent_hex_to_utf8(s: &str) -> Result<(Vec<u8>, usize), MalformedUrlError> {
 }
 
 fn decode_url (s: &str) -> Result<String, MalformedUrlError> {
-    // TODO: deal utf8
     let c_seq: Vec<(usize, char)> = s.char_indices().collect();
     let mut decoded = String::new();
     let mut cursor = c_seq.iter();
@@ -121,39 +157,6 @@ fn decode_url (s: &str) -> Result<String, MalformedUrlError> {
         }
     }
     Ok(decoded)
-}
-
-pub struct UrlStream {
-
-}
-
-impl Url {
-    pub fn parse(url_str: &str) -> Result<Self, MalformedUrlError> {
-        let url_pattern = regex::Regex::new(URL_CAPTURE_PATTERN)?;
-        match url_pattern.captures(url_str) {
-            Some(cap) => {
-                let url_chunks: Vec<&str> = cap.iter().skip(1).map(|o_m| {
-                    match o_m {
-                        Some(m) => m.as_str(),
-                        _ => ""
-                    }
-                }).collect();
-
-                let fragment = match url_chunks[4] {
-                    "" => None,
-                    v => Some(v.replace("#", ""))
-                };
-
-
-                Ok(Url { scheme: URLScheme::try_from(url_chunks[0])?,
-                         authority: Authority::try_from(url_chunks[1])?, 
-                         path: String::from(url_chunks[2]), 
-                         query: Query::try_from(url_chunks[3])?,
-                         fragment })
-            },
-            None => Err(MalformedUrlError::from(format!("malformed url string {}", url_str)))
-        }
-    }
 }
 
 
@@ -228,6 +231,41 @@ impl TryFrom<&str> for URLScheme {
 
 impl Url {
 
+    pub fn parse(url_str: &str) -> Result<Self, MalformedUrlError> {
+        let url_pattern = regex::Regex::new(URL_CAPTURE_PATTERN)?;
+        match url_pattern.captures(url_str) {
+            Some(cap) => {
+                let url_chunks: Vec<&str> = cap.iter().skip(1).map(|o_m| {
+                    match o_m {
+                        Some(m) => m.as_str(),
+                        _ => ""
+                    }
+                }).collect();
+
+                let fragment = match url_chunks[4] {
+                    "" => None,
+                    v => Some(v.replace("#", ""))
+                };
+
+
+                Ok(Url { scheme: URLScheme::try_from(url_chunks[0])?,
+                         authority: Authority::try_from(url_chunks[1])?, 
+                         path: url_chunks[2].split("/").map(|s| String::from(s)).collect(), 
+                         query: Query::try_from(url_chunks[3])?,
+                         fragment })
+            },
+            None => Err(MalformedUrlError::from(format!("malformed url string {}", url_str)))
+        }
+    }
+
+    pub fn join(self, rel_path: &str) -> Self {
+        unimplemented!()
+    }
+
+    pub fn to_string(&self) -> String {
+        unimplemented!()
+    }
+
     pub fn scheme<'a>(&'a self) -> URLScheme {
         self.scheme
     }
@@ -243,12 +281,12 @@ impl Url {
         }
     }
 
-    pub fn path<'a>(&'a self) -> &'a str {
-        &self.path
+    pub fn path<'a>(&'a self) -> String {
+        self.path.join("/")
     }
 
     pub fn path_segments<'a>(&'a self) -> Vec<&'a str> {
-        self.path.split("/").skip(1).collect()
+        self.path.iter().map(|seg| seg.as_str()).collect()
     }
 
     pub fn port(&self) -> Option<u32> {
@@ -272,6 +310,7 @@ impl Url {
     
 }
 
+
 #[test]
 fn test_url_parse() -> Result<(),MalformedUrlError> {
     let url = Url::parse("https://user@www.domain.com:3232/path1/path2/path3?name=david&age=23#about")?;
@@ -285,7 +324,6 @@ fn test_url_parse() -> Result<(),MalformedUrlError> {
     assert_eq!(query_parameters.get("name"), Some(&"david".to_string()));
     assert_eq!(query_parameters.get("age"), Some(&"23".to_string()));
     assert_eq!(url.fragment(), Some("about"));
-
 
     Ok(())
 }
